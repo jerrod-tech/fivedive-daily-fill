@@ -1,0 +1,564 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="FD Sheets">
+<meta name="theme-color" content="#1f3864">
+<title>Five &amp; Dive Daily Sheets</title>
+<style>
+:root{
+  --in:#C5D9F1;      /* light-blue input cells */
+  --in2:#B8CCE4;     /* slightly darker first wine row */
+  --dk:#0070C0;      /* dark-blue subtotal / formula rows */
+  --mid:#5B8FD6;     /* medium-blue formula cells on the weight sheet */
+  --grey:#D9D9D9;    /* grey headers / totals */
+  --yel:#FFFF00;     /* Check Specials banner */
+  --ink:#000;
+  --app:#1f3864;
+}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;padding:0;background:#e9edf3;color:var(--ink);font-family:Calibri,Carlito,"Segoe UI",Arial,sans-serif;-webkit-text-size-adjust:100%}
+body{padding-bottom:calc(64px + env(safe-area-inset-bottom))}
+
+/* ---------- app chrome ---------- */
+#top{position:sticky;top:0;z-index:20;background:var(--app);color:#fff;padding:calc(6px + env(safe-area-inset-top)) 10px 6px;display:flex;flex-wrap:wrap;align-items:center;gap:8px}
+#top h1{font-size:16px;margin:0;font-weight:700;letter-spacing:.2px;flex:1 1 auto;white-space:nowrap}
+#top h1 small{font-weight:400;opacity:.7;font-size:11px;margin-left:6px}
+.daybox{display:flex;align-items:center;gap:4px}
+.daybox button,.chipbtn{background:rgba(255,255,255,.14);border:0;color:#fff;border-radius:8px;min-width:36px;height:34px;font-size:16px;font-weight:700;padding:0 10px}
+.daybox input[type=date]{height:34px;border:0;border-radius:8px;padding:0 8px;font-size:15px;font-weight:700;background:#fff;color:#111;font-family:inherit}
+#chip{font-size:12px;font-weight:700;border-radius:999px;padding:6px 10px;background:#2e7d32;color:#fff;white-space:nowrap}
+#chip.saving{background:#b26a00}
+#chip.offline{background:#b71c1c}
+#chip.local{background:#555}
+#who{font-size:12px}
+#banner{display:none;background:#fff3cd;color:#664d03;border-bottom:1px solid #ecd27a;padding:8px 12px;font-size:13px}
+#banner.show{display:block}
+
+/* ---------- sheets ---------- */
+.sheet{display:none;padding:10px}
+.sheet.active{display:block}
+.paper{background:#fff;border:1px solid #9aa4b2;border-radius:6px;padding:8px;max-width:1500px;margin:0 auto;box-shadow:0 1px 4px rgba(0,0,0,.12)}
+table.x{border-collapse:collapse;width:100%;table-layout:fixed;background:#fff}
+table.x td,table.x th{border:1px solid #000;padding:0;height:36px;text-align:center;font-size:13px;font-weight:700;overflow:hidden;white-space:nowrap;text-overflow:clip;background:#fff}
+table.x th{font-size:12px}
+.grey{background:var(--grey)!important}
+.yel{background:var(--yel)!important}
+.dk{background:var(--dk)!important;color:#fff}
+.mid{background:var(--mid)!important}
+.blk{background:#000!important}
+.lab{text-align:center;font-size:13px;padding:0 3px!important}
+.lab.l{text-align:left;padding-left:5px!important}
+table.x td.cell{background:var(--in)}
+table.x td.cell.alt{background:var(--in2)}
+table.x td.cell.dis{background:var(--in);color:#7b8794;font-weight:400;font-size:11px}
+table.x td.calc{background:var(--mid);color:#000}
+table.x td.tot{background:var(--grey);font-size:15px}
+td.vlab{background:#fff;width:30px}
+td.vlab span{display:inline-block;writing-mode:vertical-rl;transform:rotate(180deg);font-size:12px;letter-spacing:1px}
+input.in{width:100%;height:100%;min-height:34px;border:0;outline:0;background:transparent;text-align:center;font:inherit;font-weight:600;font-size:16px;color:#0a1f44;padding:0 2px;border-radius:0}
+input.in.txt{text-align:left;padding-left:5px;font-weight:500}
+input.in:focus{background:#fffbe0;box-shadow:inset 0 0 0 2px #1f6feb}
+table.x td.cell.flash{animation:flash 1.6s ease-out}
+@keyframes flash{0%{background:#ffe08a}100%{background:var(--in)}}
+td.cell.bad{outline:2px solid #e53935;outline-offset:-2px}
+.band{height:34px;background:var(--yel);border:1px solid #000}
+
+/* weight sheet grid — stacked on phones, side-by-side like the Excel on tablets */
+.wshead{display:flex;gap:8px;margin-bottom:8px}
+.wshead .bar{flex:1;background:var(--grey);border:1px solid #000;font-weight:700;font-size:16px;padding:6px 8px}
+.wshead .date{width:240px;border:1px solid #000;font-weight:700;font-size:14px;padding:8px;text-align:left}
+.ws-grid{display:grid;gap:12px;grid-template-columns:minmax(0,1fr);grid-template-areas:"open" "close" "band" "owine" "cwine" "chg" "req"}
+.g-open{grid-area:open}.g-close{grid-area:close}.g-band{grid-area:band}.g-owine{grid-area:owine}.g-cwine{grid-area:cwine}.g-chg{grid-area:chg}.g-req{grid-area:req}
+@media(min-width:640px){.ws-grid{grid-template-columns:minmax(0,1fr) minmax(0,1fr);grid-template-areas:"open close" "band band" "owine cwine" "chg ." "req req"}}
+@media(min-width:1050px){.ws-grid{grid-template-columns:minmax(0,1fr) minmax(0,1fr) minmax(0,1.35fr);grid-template-areas:"open close req" "band band req" "owine cwine req" "chg . req"}}
+
+/* bottles & cans */
+.bcwrap{overflow-x:auto}
+table.bc{min-width:440px;max-width:900px;margin:0 auto}
+table.bc td,table.bc th{height:34px}
+table.bc td.nm{text-align:left;padding-left:5px;font-size:13px}
+table.bc tr.sub td{background:var(--dk);color:#fff;font-size:13px}
+table.bc tr.sub td.nm{font-size:12px}
+table.bc td.hcol{background:var(--grey);font-size:11px;white-space:normal;line-height:1.05}
+@media(max-width:560px){
+  .sheet{padding:4px}.paper{padding:4px}
+  table.bc{min-width:0}
+  table.bc td,table.bc th{font-size:12px}
+  table.bc td.hcol{font-size:8px;line-height:1}
+  #top h1{display:none}
+  #top{padding-bottom:5px;gap:6px}
+  .daybox{flex:1}.daybox input[type=date]{flex:1;min-width:0}
+  table.bc td.nm{font-size:12px;padding-left:3px}
+  table.bc tr.sub td.nm{white-space:normal;font-size:9.5px;line-height:1.05}
+  input.in{font-size:16px;padding:0}
+  table.x th{font-size:10px}
+  table.x td.lab{font-size:11px;padding:0 1px!important}
+  .wshead .date{width:auto;font-size:12px}
+}
+.pager{max-width:900px;margin:12px auto 0}
+.pager button{width:100%;height:52px;border:0;border-radius:12px;font-family:inherit;font-size:17px;font-weight:800;color:#fff;background:#107c41}
+.pager button.back{background:#1f3864}
+#tabs .bdg{display:inline-block;min-width:20px;margin-left:6px;padding:1px 6px;border-radius:999px;background:#0070C0;color:#fff;font-size:12px;font-weight:700}
+#who.needname{background:#ffcc00;color:#111;animation:pulse 1.6s infinite}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.6}}
+.foot{max-width:900px;margin:10px auto 0;font-size:12px;color:#444;text-align:center}
+
+/* excel-style sheet tabs */
+#tabs{position:fixed;left:0;right:0;bottom:0;z-index:30;background:#f3f3f3;border-top:1px solid #bbb;display:flex;gap:4px;padding:6px 8px calc(6px + env(safe-area-inset-bottom));align-items:flex-end}
+#tabs button{border:1px solid #9aa4b2;border-bottom:0;background:#cfe0f5;color:#111;font-family:inherit;font-weight:600;font-size:15px;height:42px;padding:0 18px;border-radius:8px 8px 0 0}
+#tabs button.on{background:#fff;color:#0a5c36;border-bottom:3px solid #107c41;font-weight:800}
+#tabs .sp{flex:1}
+#tabs .ver{font-size:10px;color:#777;padding-bottom:6px}
+
+/* modal */
+#nameModal{position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:99;display:none;align-items:center;justify-content:center;padding:20px}
+#nameModal.show{display:flex}
+#nameModal .card{background:#fff;border-radius:14px;padding:20px;max-width:360px;width:100%}
+#nameModal h2{margin:0 0 6px;font-size:18px}
+#nameModal p{margin:0 0 12px;color:#444;font-size:14px}
+#nameModal input{width:100%;font-size:18px;padding:10px;border:2px solid #9aa4b2;border-radius:8px;margin-bottom:12px}
+#nameModal button{width:100%;font-size:17px;padding:12px;border:0;border-radius:10px;background:var(--app);color:#fff;font-weight:700}
+</style>
+</head>
+<body>
+
+<div id="top">
+  <h1>Five &amp; Dive <small>Daily Sheets</small></h1>
+  <div class="daybox">
+    <button id="dPrev" aria-label="Previous day">&#9664;</button>
+    <input type="date" id="dayPick" aria-label="Business day">
+    <button id="dNext" aria-label="Next day">&#9654;</button>
+  </div>
+  <span id="chip" class="local">Starting…</span>
+  <button id="who" class="chipbtn" title="Change name">&#128100; —</button>
+</div>
+<div id="banner"></div>
+
+<div id="ws" class="sheet active"><div class="paper" id="wsPaper"></div><div class="pager"><button id="goBc" class="next">Next page: Bottles &amp; Cans &rarr;</button></div></div>
+<div id="bc" class="sheet"><div class="paper"><div class="bcwrap" id="bcWrap"></div><div class="foot" id="bcFoot"></div></div><div class="pager"><button id="goWs" class="back">&larr; Back to Weight Sheet</button></div></div>
+
+<div id="tabs">
+  <button id="tabWs" class="on">Weight Sheet<span class="bdg" id="bdgWs">0</span></button>
+  <button id="tabBc">Bottles &amp; Cans<span class="bdg" id="bdgBc">0</span></button>
+  <span class="sp"></span>
+  <span class="ver" id="ver"></span>
+</div>
+
+<div id="nameModal"><div class="card">
+  <h2>Who's entering numbers?</h2>
+  <p>Your name is saved on this device so the team can see who changed what.</p>
+  <input id="nameInput" type="text" placeholder="e.g. Jerrod" autocomplete="off" maxlength="24">
+  <button id="nameSave">Save &amp; open sheets</button>
+</div></div>
+
+<script>
+(function () {
+'use strict';
+var BUILD = '2026-10-05-sheets1';
+var WORKER = 'https://fd-cc-sync.jlsutherland24.workers.dev';
+var SECRET = ['Five', 'And', 'Dive', '20', '24'].join('');
+
+/* ===================== sheet schema (mirrors the Excel exactly) ===================== */
+var LIQ_TYPES = ['Well', 'Tequila', 'Premium', 'Premium', 'Premium', 'Premium', 'Premium', 'Premium'];
+var WINE = ['Malbec', 'Cab Sav', 'Box Rose', 'Box White', 'Vintage Ink Red', 'Vintage Ink White'];
+var REQ_GROUPS = [['Well', 8], ['Tequila', 2], ['Premium', 15]];       // rows 5-12, 13-14, 15-29
+var WREQ = [['Box Red', 148.25], ['Box Rose', 148.25], ['Box White', 148.25], ['Vintage Ink Red', 44], ['Vintage Ink White', 44]];
+var BC = [{"t":"h","row":3,"label":"Coolers/Seltzers"},{"t":"i","row":4,"name":"Simply Spiked"},{"t":"i","row":5,"name":"Ole Assorted"},{"t":"i","row":6,"name":"Twisted Tea"},{"t":"i","row":7,"name":"Coors Slushies"},{"t":"i","row":8,"name":"Smirnoff Ice"},{"t":"i","row":9,"name":"Smirnoff Lemonade"},{"t":"s","row":10,"label":"COOLERS / BEER BOTTLES SOLD","from":4,"to":9},{"t":"y","row":11,"label":"******************Check Specials*********************"},{"t":"h","row":12,"label":"Small Cans/Non Alcs"},{"t":"i","row":13,"name":"Coors LT"},{"t":"i","row":14,"name":"Miller High Life"},{"t":"i","row":15,"name":"Coronitas"},{"t":"i","row":16,"name":"Coors Original"},{"t":"i","row":17,"name":"Lucky"},{"t":"i","row":18,"name":"Pilsner"},{"t":"i","row":19,"name":"Canadian"},{"t":"i","row":20,"name":"kokanee"},{"t":"i","row":21,"name":"Budweiser"},{"t":"i","row":22,"name":"Non Alcs Assorted"},{"t":"s","row":23,"label":"355ML CANS SOLD","from":13,"to":22},{"t":"y","row":24,"label":""},{"t":"h","row":25,"label":"Bottles Beer"},{"t":"i","row":26,"name":"Stella"},{"t":"i","row":27,"name":"Heineken"},{"t":"i","row":28,"name":"Michelob"},{"t":"i","row":29,"name":"Keiths"},{"t":"i","row":30,"name":"Corona"},{"t":"s","row":31,"label":"355ML BOTTLES SOLD","from":26,"to":30},{"t":"y","row":32,"label":""},{"t":"h","row":33,"label":"Tallboy"},{"t":"i","row":34,"name":"Strongbow"},{"t":"i","row":35,"name":"PBR"},{"t":"i","row":36,"name":"SS Man Crush"},{"t":"i","row":37,"name":"SC Gremlin IPA"},{"t":"i","row":38,"name":"SC Deathwave"},{"t":"i","row":39,"name":"SC Wolf"},{"t":"i","row":40,"name":"Dinosour Assorted"},{"t":"i","row":41,"name":"Hi Cutie"},{"t":"i","row":42,"name":"TS Apricot Tea"},{"t":"i","row":43,"name":"TS Sangria Peach"},{"t":"i","row":44,"name":"Railyard Peach"},{"t":"i","row":45,"name":"Steigl Radler"},{"t":"i","row":46,"name":"88 Coffee Stout"},{"t":"i","row":47,"name":"Glutenberg"},{"t":"s","row":48,"label":"TALLBOYS SOLD","from":34,"to":47},{"t":"y","row":49,"label":"****************Check Specials*****************"},{"t":"h","row":50,"label":"Extras"},{"t":"i","row":51,"name":"Redbull"},{"t":"i","row":52,"name":"Jello Shots"},{"t":"i","row":53,"name":"Pop Cans"},{"t":"s","row":54,"label":"REDBULL SOLD","from":51,"to":51}];
+
+/* ===================== small helpers ===================== */
+function $(id) { return document.getElementById(id); }
+function pad(n) { return (n < 10 ? '0' : '') + n; }
+function ymd(d) { return d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate()); }
+function bizDay(now) { return ymd(new Date((now || new Date()).getTime() - 5 * 3600 * 1000)); }   // business day rolls at 5 AM
+function addDays(s, n) { var p = s.split('-'); var d = new Date(+p[0], +p[1] - 1, +p[2] + n); return ymd(d); }
+function prettyDay(s) { var p = s.split('-'); return new Date(+p[0], +p[1] - 1, +p[2]).toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' }); }
+function esc(s) { return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/"/g, '&quot;'); }
+function num(v) { if (v === '' || v == null) return null; var n = parseFloat(v); return isNaN(n) ? null : n; }
+function evalSum(v) { // "6+12" -> 18 ; "7" -> 7 ; "" -> null
+  if (v === '' || v == null) return null; var tot = 0, any = false;
+  String(v).split('+').forEach(function (p) { var n = parseFloat(p); if (!isNaN(n)) { tot += n; any = true; } });
+  return any ? tot : null;
+}
+function fmt(n) { if (n == null || isNaN(n)) return ''; return String(Math.round(n * 100) / 100); }
+function lsGet(k) { try { return localStorage.getItem(k); } catch (e) { return null; } }
+function lsSet(k, v) { try { localStorage.setItem(k, v); } catch (e) {} }
+
+/* ===================== state ===================== */
+var DEVICE = lsGet('fd_sheets_name') || '';
+var S = { day: '', rows: {}, dirty: {}, serverTs: 0 };
+var vc = 0;                       // per-edit version counter (in-flight protection)
+var pinnedDay = false;
+function rowKey(line) { return 'fdsheet:' + S.day + ':' + line; }
+function getF(line, f) { var r = S.rows[line]; return (r && r.f[f]) ? r.f[f].v : ''; }
+
+function saveLocal() {
+  lsSet('fdsheets:' + S.day, JSON.stringify({ rows: S.rows, dirty: S.dirty, serverTs: S.serverTs }));
+}
+function loadLocal(day) {
+  S = { day: day, rows: {}, dirty: {}, serverTs: 0 };
+  var raw = lsGet('fdsheets:' + day);
+  if (raw) { try { var o = JSON.parse(raw); S.rows = o.rows || {}; S.dirty = o.dirty || {}; S.serverTs = o.serverTs || 0; } catch (e) {} }
+  // prune local copies older than 5 days
+  try {
+    for (var i = localStorage.length - 1; i >= 0; i--) {
+      var k = localStorage.key(i);
+      if (k && k.indexOf('fdsheets:') === 0 && k.slice(9) < addDays(bizDay(), -5)) localStorage.removeItem(k);
+    }
+  } catch (e) {}
+}
+
+function setField(line, f, v) {
+  var r = S.rows[line] || (S.rows[line] = { f: {} });
+  var prev = r.f[f] ? r.f[f].ts : 0;
+  r.f[f] = { v: v, ts: Math.max(Date.now(), prev + 1), by: DEVICE || 'device' };
+  S.dirty[line] = ++vc;
+  saveLocal();
+  recalc();
+  schedulePush();
+  setChip();
+}
+
+/* ===================== building the sheets ===================== */
+function inp(line, f, kind, extra) {
+  var mode = kind === 'r' ? 'tel' : (kind === 't' ? 'text' : 'decimal');
+  return '<input class="in' + (kind === 't' ? ' txt' : '') + '" data-l="' + line + '" data-f="' + f + '" data-k="' + kind + '" inputmode="' + mode + '" enterkeyhint="next" autocomplete="off" autocapitalize="' + (kind === 't' ? 'words' : 'off') + '" spellcheck="false"' + (extra || '') + '>';
+}
+function cellTd(line, f, kind, cls) { return '<td class="cell ' + (cls || '') + '">' + inp(line, f, kind) + '</td>'; }
+
+function liqTable(pre, title) {
+  var h = '<table class="x"><colgroup><col style="width:30px"><col style="width:30%"><col><col></colgroup>';
+  h += '<tr><th colspan="4" class="grey">' + title + '</th></tr>';
+  h += '<tr><td class="vlab" rowspan="9"><span>LIQUOR</span></td><th>TYPE</th><th>BOTTLES</th><th>OUNCES</th></tr>';
+  LIQ_TYPES.forEach(function (t, i) {
+    h += '<tr><td class="lab">' + t + '</td>' + cellTd(pre + i, 'b', 'n') + cellTd(pre + i, 'oz', 'n') + '</tr>';
+  });
+  return h + '</table>';
+}
+function wineTable(pre, title) {
+  var h = '<table class="x"><colgroup><col style="width:42%"><col><col style="width:28%"></colgroup>';
+  h += '<tr><th colspan="3" class="grey">' + title + '</th></tr>';
+  h += '<tr><th>Type</th><th>BOX/BTL</th><th class="blk"></th></tr>';
+  WINE.forEach(function (t, i) {
+    h += '<tr><td class="lab">' + t + '</td>' + cellTd(pre + i, 'v', 'n', i === 0 ? 'alt' : '');
+    h += (i < 4) ? '<td class="blk"></td>' : '<td class="calc" data-calc="mir:' + pre + i + '"></td>';
+    h += '</tr>';
+  });
+  return h + '</table>';
+}
+function chgTable() {
+  var h = '<table class="x"><colgroup><col style="width:50%"><col></colgroup>';
+  h += '<tr><th colspan="2" class="grey">CHANGEOVER</th></tr><tr><th>Type</th><th>BOX/BTL</th></tr>';
+  WINE.forEach(function (t, i) { h += '<tr><td class="lab">' + t + '</td>' + cellTd('wh' + i, 'v', 'n', i === 0 ? 'alt' : '') + '</tr>'; });
+  return h + '</table>';
+}
+function reqTable() {
+  var h = '<table class="x"><colgroup><col style="width:17%"><col style="width:27%"><col style="width:17%"><col style="width:17%"><col style="width:11%"><col style="width:11%"></colgroup>';
+  h += '<tr><th colspan="4" class="grey">REQUISITIONS</th><th colspan="2" style="background:#fff">TOTALS</th></tr>';
+  h += '<tr><th>Type</th><th>PRODUCT(S)</th><th># OF BOTTLES</th><th>OUNCES</th><th>BOTTLES</th><th>OUNCES</th></tr>';
+  var idx = 0;
+  REQ_GROUPS.forEach(function (g, gi) {
+    for (var k = 0; k < g[1]; k++, idx++) {
+      h += '<tr><td class="lab">' + g[0] + '</td>' +
+        '<td class="cell">' + inp('rq' + idx, 'p', 't') + '</td>' + cellTd('rq' + idx, 'b', 'n') + cellTd('rq' + idx, 'oz', 'n');
+      if (k === 0) h += '<td class="tot" rowspan="' + g[1] + '" data-calc="rtb:' + gi + '">0</td><td class="tot" rowspan="' + g[1] + '" data-calc="rto:' + gi + '">0</td>';
+      h += '</tr>';
+    }
+  });
+  h += '<tr><td style="background:#fff"></td><th># Bottles/Boxes</th><th>Oz.</th><td colspan="3" style="border:0;background:#fff"></td></tr>';
+  WREQ.forEach(function (w, i) {
+    h += '<tr><td class="lab" colspan="1" style="font-size:12px">' + w[0] + '</td>' + cellTd('wr' + i, 'v', 'n') + '<td class="calc" data-calc="wr:' + i + '">0</td><td colspan="3" style="border:0;background:#fff"></td></tr>';
+  });
+  return h + '</table>';
+}
+function buildWs() {
+  var h = '<div class="wshead"><div class="bar">BAR:</div><div class="date">DATE: <span id="wsDate"></span></div></div>';
+  h += '<div class="ws-grid">';
+  h += '<div class="g-open">' + liqTable('lo', 'OPEN ALCOHOL WEIGHTS') + '</div>';
+  h += '<div class="g-close">' + liqTable('lc', 'CLOSE ALCOHOL WEIGHTS') + '</div>';
+  h += '<div class="g-band band"></div>';
+  h += '<div class="g-owine">' + wineTable('wo', 'OPEN COUNT WINE') + '</div>';
+  h += '<div class="g-cwine">' + wineTable('wc', 'CLOSE COUNT WINE') + '</div>';
+  h += '<div class="g-chg">' + chgTable() + '</div>';
+  h += '<div class="g-req">' + reqTable() + '</div>';
+  h += '</div>';
+  $('wsPaper').innerHTML = h;
+}
+function buildBc() {
+  var h = '<table class="x bc"><colgroup><col style="width:27%"><col style="width:12%"><col style="width:15%"><col style="width:9%"><col style="width:14%"><col style="width:8%"><col style="width:8%"><col style="width:7%"></colgroup>';
+  h += '<tr><td class="grey" colspan="8" style="height:22px"></td></tr>';
+  h += '<tr><td class="grey"></td><td class="hcol">START</td><td class="hcol">REQUISITION</td><td class="hcol">B+C</td><td class="hcol">CHANGEOVER</td><td class="hcol">USAGE</td><td class="hcol">Items Sold</td><td class="hcol">+ / -</td></tr>';
+  BC.forEach(function (r) {
+    if (r.t === 'h') h += '<tr><td colspan="8" class="grey">' + esc(r.label) + '</td></tr>';
+    else if (r.t === 'y') h += '<tr><td colspan="8" class="yel" style="height:' + (r.label ? 24 : 20) + 'px;font-size:12px">' + esc(r.label) + '</td></tr>';
+    else if (r.t === 's') h += '<tr class="sub" data-sub="' + r.row + '"><td class="nm">' + esc(r.label) + '</td><td data-calc="sb:' + r.row + '"></td><td data-calc="sr:' + r.row + '"></td><td data-calc="sd:' + r.row + '"></td><td data-calc="se:' + r.row + '"></td><td data-calc="sf:' + r.row + '"></td><td data-calc="sg:' + r.row + '"></td><td data-calc="sh:' + r.row + '"></td></tr>';
+    else {
+      var L = 'bc' + r.row;
+      h += '<tr><td class="nm">' + esc(r.name) + '</td>' + cellTd(L, 's', 'n') + cellTd(L, 'r', 'r') + '<td data-calc="d:' + r.row + '"></td>' + cellTd(L, 'c', 'n') +
+        '<td data-calc="f:' + r.row + '"></td><td class="cell dis" title="Filled automatically from the Pixel sales report">POS</td><td class="dk" data-calc="h:' + r.row + '"></td></tr>';
+    }
+  });
+  h += '</table>';
+  $('bcWrap').innerHTML = h;
+}
+
+/* ===================== live formulas (same math as the workbook) ===================== */
+function recalc() {
+  var cells = document.querySelectorAll('[data-calc]');
+  // Pre-compute helpers
+  function sumField(prefixLines, f) { var t = 0, any = false; prefixLines.forEach(function (l) { var n = num(getF(l, f)); if (n != null) { t += n; any = true; } }); return any ? t : 0; }
+  var groups = []; var idx = 0;
+  REQ_GROUPS.forEach(function (g) { var ls = []; for (var k = 0; k < g[1]; k++, idx++) ls.push('rq' + idx); groups.push(ls); });
+  function bcCalc(row) {
+    var L = 'bc' + row, s = num(getF(L, 's')), r = evalSum(getF(L, 'r')), c = num(getF(L, 'c'));
+    var d = (s == null && r == null) ? null : (s || 0) + (r || 0);
+    var f = (c == null) ? null : c - (d || 0);
+    return { s: s, r: r, c: c, d: d, f: f };
+  }
+  var subCache = {};
+  function subOf(row) {
+    if (subCache[row]) return subCache[row];
+    var def = BC.filter(function (x) { return x.t === 's' && x.row === row; })[0];
+    var t = { s: 0, r: 0, d: 0, c: 0, f: 0, anyC: false, any: false };
+    for (var rr = def.from; rr <= def.to; rr++) {
+      var x = bcCalc(rr);
+      if (x.s != null) { t.s += x.s; t.any = true; }
+      if (x.r != null) { t.r += x.r; t.any = true; }
+      t.d += (x.d || 0);
+      if (x.c != null) { t.c += x.c; t.anyC = true; }
+      if (x.f != null) t.f += x.f;
+    }
+    return (subCache[row] = t);
+  }
+  for (var i = 0; i < cells.length; i++) {
+    var el = cells[i], spec = el.getAttribute('data-calc').split(':'), kind = spec[0], a = spec[1], out = '';
+    if (kind === 'mir') { out = fmt(num(getF(a, 'v'))); }
+    else if (kind === 'rtb') out = fmt(sumField(groups[+a], 'b'));
+    else if (kind === 'rto') out = fmt(sumField(groups[+a], 'oz'));
+    else if (kind === 'wr') { var n = num(getF('wr' + a, 'v')); out = fmt((n == null ? 0 : n) * WREQ[+a][1]); }
+    else if (kind === 'd') { var x = bcCalc(+a); out = x.d == null ? '' : fmt(x.d); }
+    else if (kind === 'f') { var y = bcCalc(+a); out = y.f == null ? '' : fmt(y.f); }
+    else if (kind === 'h') out = '';
+    else if (kind.charAt(0) === 's') {
+      var t = subOf(+a);
+      if (kind === 'sb') out = t.any ? fmt(t.s) : '';
+      else if (kind === 'sr') out = t.any ? fmt(t.r) : '';
+      else if (kind === 'sd') out = t.any ? fmt(t.d) : '';
+      else if (kind === 'se') out = t.anyC ? fmt(t.c) : '';
+      else if (kind === 'sf') out = t.anyC ? fmt(t.f) : '';
+      else out = '';
+    }
+    if (el.textContent !== out) el.textContent = out;
+  }
+  var nWs = 0, nBc = 0;
+  Object.keys(S.rows).forEach(function (l) { var f = S.rows[l].f; Object.keys(f).forEach(function (k) { if (f[k].v !== '' && f[k].v != null) { if (l.indexOf('bc') === 0) nBc++; else nWs++; } }); });
+  $('bdgWs').textContent = nWs; $('bdgBc').textContent = nBc;
+  // footer: last change
+  var best = null;
+  Object.keys(S.rows).forEach(function (l) { var f = S.rows[l].f; Object.keys(f).forEach(function (k) { if (!best || f[k].ts > best.ts) best = f[k]; }); });
+  $('bcFoot').textContent = best ? ('Last change: ' + (best.by || 'device') + ' at ' + new Date(best.ts).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }) + '. "POS" = Items Sold fills in automatically from the Pixel report when the sheet is built.') : '"POS" = Items Sold fills in automatically from the Pixel report when the sheet is built.';
+}
+
+/* ===================== painting values into inputs ===================== */
+function paintAll() {
+  var els = document.querySelectorAll('input.in');
+  for (var i = 0; i < els.length; i++) paintOne(els[i], false);
+  recalc();
+}
+function paintOne(el, flash) {
+  if (document.activeElement === el) return;               // never overwrite what someone is typing
+  var l = el.getAttribute('data-l'), f = el.getAttribute('data-f');
+  var v = getF(l, f);
+  if (el.value !== v) {
+    el.value = v;
+    if (flash) { var td = el.parentNode; td.classList.remove('flash'); void td.offsetWidth; td.classList.add('flash'); }
+  }
+  var r = S.rows[l]; if (r && r.f[f]) el.title = (r.f[f].by || '') + ' · ' + new Date(r.f[f].ts).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+}
+function sanitize(v, kind) {
+  if (kind === 'n') return v.replace(/[^0-9.\-]/g, '').replace(/(\..*)\./g, '$1');
+  if (kind === 'r') return v.replace(/[^0-9.+]/g, '');
+  return v.slice(0, 60);
+}
+document.addEventListener('input', function (e) {
+  var el = e.target; if (!el.classList || !el.classList.contains('in')) return;
+  var k = el.getAttribute('data-k'), clean = sanitize(el.value, k);
+  if (clean !== el.value) el.value = clean;
+  setField(el.getAttribute('data-l'), el.getAttribute('data-f'), clean);
+});
+document.addEventListener('focusout', function (e) { var el = e.target; if (el.classList && el.classList.contains('in')) paintOne(el, false); });
+document.addEventListener('keydown', function (e) {
+  if (e.key !== 'Enter') return; var el = e.target; if (!el.classList || !el.classList.contains('in')) return;
+  e.preventDefault();
+  var sheet = el.closest('.sheet'), list = Array.prototype.slice.call(sheet.querySelectorAll('input.in'));
+  var i = list.indexOf(el); if (i >= 0 && list[i + 1]) list[i + 1].focus(); else el.blur();
+});
+document.addEventListener('focusin', function (e) { var el = e.target; if (el.classList && el.classList.contains('in') && el.select) { try { el.select(); } catch (x) {} } });
+
+/* ===================== sync ===================== */
+var mode = null, modeAt = 0, pushing = false, pushAgain = false, pushTimer = null, pullTimer = null, status = 'local', lastOk = 0;
+function H() { return { 'Content-Type': 'application/json', 'X-FD-Secret': SECRET }; }
+function setStatus(s) { status = s; if (s === 'ok') lastOk = Date.now(); setChip(); }
+function setChip() {
+  var chip = $('chip'), n = Object.keys(S.dirty).length;
+  chip.className = '';
+  if (status === 'offline') { chip.classList.add('offline'); chip.textContent = 'Offline · ' + n + ' waiting'; }
+  else if (n || pushing) { chip.classList.add('saving'); chip.textContent = 'Saving…'; }
+  else if (status === 'ok') { chip.textContent = '● Live · synced ' + new Date(lastOk).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit', second: '2-digit' }); }
+  else { chip.classList.add('local'); chip.textContent = 'Connecting…'; }
+  var b = $('banner');
+  if (status === 'offline') { b.textContent = 'No connection — your entries are saved on this device and will sync automatically when you are back online.'; b.className = 'show'; }
+  else if (mode === 'boh') { b.textContent = 'Sync is running in standard mode (updates every ~30s). For instant sync, deploy the updated Worker (v9).'; b.className = 'show'; }
+  else b.className = '';
+}
+async function ensureMode() {
+  var now = Date.now();
+  if (mode === 'sheets' || (mode === 'boh' && now - modeAt < 600000)) return true;
+  try {
+    var r = await fetch(WORKER + '/sync/sheets?day=' + S.day + '&since=' + S.serverTs, { headers: { 'X-FD-Secret': SECRET } });
+    if (r.ok) { mode = 'sheets'; modeAt = now; return true; }
+    if (r.status === 404) {
+      var r2 = await fetch(WORKER + '/sync/boh', { headers: { 'X-FD-Secret': SECRET } });
+      if (r2.ok) { mode = 'boh'; modeAt = now; return true; }
+    }
+  } catch (e) {}
+  return false;
+}
+function mergeRemote(line, remoteF) {
+  var changed = [], r = S.rows[line] || (S.rows[line] = { f: {} });
+  Object.keys(remoteF).forEach(function (f) {
+    var inc = remoteF[f]; if (!inc || typeof inc !== 'object') return;
+    var cur = r.f[f];
+    if (!cur || (inc.ts || 0) > (cur.ts || 0)) { r.f[f] = inc; changed.push(f); }
+    else if (mode === 'boh' && (cur.ts || 0) > (inc.ts || 0) && !S.dirty[line]) S.dirty[line] = ++vc;   // local is newer -> converge back
+  });
+  if (mode === 'boh') { Object.keys(r.f).forEach(function (f) { if (!remoteF[f] && !S.dirty[line]) S.dirty[line] = ++vc; }); }
+  return changed;
+}
+async function doPull() {
+  if (!(await ensureMode())) { setStatus('offline'); return false; }
+  try {
+    var forDay = S.day;
+    var url = mode === 'sheets' ? WORKER + '/sync/sheets?day=' + forDay + '&since=' + S.serverTs : WORKER + '/sync/boh';
+    var res = await fetch(url, { headers: { 'X-FD-Secret': SECRET } });
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    var data = await res.json(), prefix = 'fdsheet:' + forDay + ':', changedAny = false;
+    if (forDay !== S.day) return false;          // user flipped to another day mid-request
+    (data.items || []).forEach(function (it) {
+      if (!it.key || it.key.indexOf(prefix) !== 0) return;
+      var obj; try { obj = typeof it.data === 'string' ? JSON.parse(it.data) : it.data; } catch (e) { return; }
+      var line = it.key.slice(prefix.length), ch = mergeRemote(line, (obj && obj.f) || {});
+      if (ch.length) {
+        changedAny = true;
+        ch.forEach(function (f) { var el = document.querySelector('input.in[data-l="' + line + '"][data-f="' + f + '"]'); if (el) paintOne(el, true); });
+      }
+    });
+    if (mode === 'sheets' && data.serverTs) S.serverTs = Math.max(S.serverTs, data.serverTs);
+    saveLocal(); if (changedAny) recalc();
+    if (Object.keys(S.dirty).length && mode === 'boh') schedulePush();
+    setStatus('ok');
+    return true;
+  } catch (e) { setStatus('offline'); return false; }
+}
+function schedulePush() { clearTimeout(pushTimer); pushTimer = setTimeout(doPush, 700); }
+async function doPush() {
+  if (!Object.keys(S.dirty).length) { setChip(); return; }
+  if (pushing) { pushAgain = true; return; }
+  pushing = true; setChip();
+  try {
+    if (!(await ensureMode())) throw new Error('offline');
+    if (mode === 'boh') await doPull();                           // merge first so a plain-table overwrite can't drop a teammate's cell
+    var snap = {}, items = [], day = S.day;
+    Object.keys(S.dirty).forEach(function (line) {
+      var r = S.rows[line]; if (!r) return;
+      var mx = 0; Object.keys(r.f).forEach(function (f) { if (r.f[f].ts > mx) mx = r.f[f].ts; });
+      snap[line] = S.dirty[line];
+      items.push({ key: 'fdsheet:' + day + ':' + line, data: JSON.stringify({ f: r.f }), ts: mx || Date.now() });
+    });
+    if (items.length) {
+      var res = await fetch(WORKER + (mode === 'sheets' ? '/sync/sheets' : '/sync/boh'), { method: 'POST', headers: H(), body: JSON.stringify({ items: items }) });
+      if (!res.ok) throw new Error('HTTP ' + res.status);
+    }
+    if (day === S.day) Object.keys(snap).forEach(function (l) { if (S.dirty[l] === snap[l]) delete S.dirty[l]; });
+    saveLocal(); setStatus('ok');
+  } catch (e) {
+    setStatus('offline'); clearTimeout(pushTimer); pushTimer = setTimeout(doPush, 8000);
+  } finally {
+    pushing = false; setChip();
+    if (pushAgain) { pushAgain = false; schedulePush(); }
+  }
+}
+function startPolling() {
+  clearInterval(pullTimer);
+  pullTimer = setInterval(function () {
+    if (document.hidden) return;
+    if (Object.keys(S.dirty).length) { doPush(); return; }
+    doPull();
+  }, mode === 'boh' ? 30000 : 5000);
+}
+
+/* ===================== day handling / boot ===================== */
+function loadDay(day) {
+  loadLocal(day);
+  $('dayPick').value = day;
+  $('wsDate').textContent = prettyDay(day);
+  paintAll(); setChip();
+  doPull().then(function () { startPolling(); if (Object.keys(S.dirty).length) schedulePush(); });
+}
+$('dayPick').addEventListener('change', function () { if (this.value) { pinnedDay = this.value !== bizDay(); loadDay(this.value); } });
+$('dPrev').addEventListener('click', function () { pinnedDay = true; loadDay(addDays(S.day, -1)); });
+$('dNext').addEventListener('click', function () { var n = addDays(S.day, 1); pinnedDay = n !== bizDay(); loadDay(n); });
+document.addEventListener('visibilitychange', function () {
+  if (document.hidden) return;
+  if (!pinnedDay && S.day !== bizDay()) { loadDay(bizDay()); return; }
+  if (Object.keys(S.dirty).length) doPush(); else doPull();
+});
+window.addEventListener('online', function () { doPush(); doPull(); });
+window.addEventListener('focus', function () { doPull(); });
+
+function showTab(which) {
+  $('ws').classList.toggle('active', which === 'ws'); $('bc').classList.toggle('active', which === 'bc');
+  $('tabWs').classList.toggle('on', which === 'ws'); $('tabBc').classList.toggle('on', which === 'bc');
+  window.scrollTo(0, 0);
+}
+$('tabWs').addEventListener('click', function () { showTab('ws'); });
+$('tabBc').addEventListener('click', function () { showTab('bc'); });
+
+$('goBc').addEventListener('click', function () { showTab('bc'); });
+$('goWs').addEventListener('click', function () { showTab('ws'); });
+(function () {   // swipe left/right between the two pages (ignored when the touch starts in a cell)
+  var x0 = 0, y0 = 0, t0 = 0, ok = false;
+  document.addEventListener('touchstart', function (e) {
+    var t = e.touches[0]; x0 = t.clientX; y0 = t.clientY; t0 = Date.now();
+    ok = !(e.target.closest && e.target.closest('input,#top,#tabs,#nameModal'));
+  }, { passive: true });
+  document.addEventListener('touchend', function (e) {
+    if (!ok) return; var t = e.changedTouches[0], dx = t.clientX - x0, dy = t.clientY - y0;
+    if (Math.abs(dx) < 80 || Math.abs(dx) < Math.abs(dy) * 1.6 || Date.now() - t0 > 700) return;
+    showTab(dx < 0 ? 'bc' : 'ws');
+  }, { passive: true });
+})();
+function renderWho() { $('who').textContent = '\uD83D\uDC64 ' + (DEVICE || 'Add your name'); $('who').classList.toggle('needname', !DEVICE); }
+function askName() { $('nameInput').value = DEVICE; $('nameModal').classList.add('show'); setTimeout(function () { $('nameInput').focus(); }, 50); }
+$('who').addEventListener('click', askName);
+$('nameSave').addEventListener('click', function () {
+  var v = $('nameInput').value.trim(); if (!v) { $('nameInput').focus(); return; }
+  DEVICE = v; lsSet('fd_sheets_name', v); renderWho(); $('nameModal').classList.remove('show');
+});
+$('nameInput').addEventListener('keydown', function (e) { if (e.key === 'Enter') $('nameSave').click(); });
+
+buildWs(); buildBc();
+$('ver').textContent = 'build ' + BUILD;
+renderWho();
+showTab('ws');
+loadDay(bizDay());
+
+// test hooks (harmless in production)
+window.__fdSheets = { S: function () { return S; }, mode: function () { return mode; }, pull: doPull, push: doPush, loadDay: loadDay, build: BUILD };
+})();
+</script>
+</body>
+</html>
